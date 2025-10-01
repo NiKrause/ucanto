@@ -147,10 +147,14 @@ const connection = Client.connect({
 ### Key Management
 
 ```ts
-import { ed25519 } from '@ucanto/principal'
+import { ed25519, P256 } from '@ucanto/principal'
 
-// Generate new keys
+// Generate new keys (Ed25519 - default)
 const agent = await ed25519.generate()
+
+// Or use P-256 for NIST compliance
+const p256Agent = await P256.generate()
+console.log(`P-256 Algorithm: ${p256Agent.signatureAlgorithm}`) // ES256
 
 // Save keys (browser)
 localStorage.setItem('agent', agent.toString())
