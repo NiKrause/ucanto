@@ -22,38 +22,22 @@ npm install @ucanto/transport
 ```
 
 ## Example Usage
+
+### HTTP Transport
+
 ```js
 import * as HTTP from '@ucanto/transport/http'
 import { CAR } from '@ucanto/transport'
 import { ed25519 } from '@ucanto/principal'
-import { invoke, Message, Receipt } from '@ucanto/core'
+import { invoke, Message } from '@ucanto/core'
+import { DID } from '@ucanto/core'
 
-// Parse the service DID (public key) 
+// Parse the service DID
 // SERVICE_DID should be a DID like: did:key:z6Mkk89bC3JrVqKie71YEcc5M1SMVxuCgNx6zLZ8SYJsxALi
-const service = ed25519.Verifier.parse(process.env.SERVICE_DID)
+const service = DID.parse(process.env.SERVICE_DID)
 // Parse the agent's private key
 // AGENT_PRIVATE_KEY should be a base64 private key starting with: Mg..
 const issuer = ed25519.parse(process.env.AGENT_PRIVATE_KEY)
-
-// Mock fetch that simulates a UCAN service
-const mockFetch = async (url, init) => {
-  console.log('Sending request to:', url)
-  console.log('Request headers:', init.headers)
-  
-  // Simulate a service response with a receipt
-  const { invocations } = await CAR.request.decode(init)
-  const receipts = await Promise.all(
-    invocations.map(inv => Receipt.issue({
-      ran: inv.cid,
-      issuer: service,
-      result: { ok: { status: 'added' } }
-    }))
-  )
-  
-  const responseMessage = await Message.build({ receipts })
-  const response = await CAR.response.encode(responseMessage)    
-  return new Response(response.body, { headers: response.headers })
-}
 
 // Create UCAN invocation
 const invocation = invoke({
@@ -70,10 +54,9 @@ const invocation = invoke({
 const message = await Message.build({ invocations: [invocation] })
 const request = await CAR.request.encode(message)
 
-// Create HTTP channel and send
+// Create HTTP channel and send to a UCAN service
 const channel = HTTP.open({ 
-  url: new URL('https://api.example.com'),
-  fetch: mockFetch
+  url: new URL(process.env.SERVICE_URL || 'https://api.example.com')
 })
 const response = await channel.request(request)
 
@@ -81,6 +64,10 @@ const response = await channel.request(request)
 const replyMessage = await CAR.response.decode(response)
 console.log('Received:', replyMessage.receipts.size, 'receipts')
 ```
+
+### Server as Channel (for Testing)
+
+For testing, you can use a UCAN server directly as a channel without HTTP. See the [`@ucanto/server` README](../server/README.md) for examples of using a server as a channel.
 
 ## Setup Instructions
 
