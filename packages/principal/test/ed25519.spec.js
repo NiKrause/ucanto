@@ -2,6 +2,7 @@ import { ed25519, ed25519 as Lib } from '../src/lib.js'
 import { assert } from 'chai'
 import { sha256 } from 'multiformats/hashes/sha2'
 import { varint } from 'multiformats'
+import { base64url } from 'multiformats/bases/base64'
 import { webcrypto } from 'one-webcrypto'
 
 describe('signing principal', () => {
@@ -134,6 +135,88 @@ describe('signing principal', () => {
     assert.equal(signer.toDIDKey(), signer.did())
     assert.equal(signer.signatureAlgorithm, 'EdDSA')
     assert.equal(await alias.verify(payload, signature), true)
+  })
+
+  it('generate extractable throws on unsupported pkcs8 key length', async () => {
+    const exportKey = /** @type {any} */ (webcrypto.subtle.exportKey)
+    webcrypto.subtle.exportKey = async function (format, key) {
+      if (format === 'pkcs8') {
+        return new Uint8Array(47)
+      }
+      return exportKey.call(this, format, key)
+    }
+
+    try {
+      await Lib.generate({ extractable: true })
+      assert.fail('Expected to throw')
+    } catch (error) {
+      assert.match(String(error), /Unsupported ed25519 pkcs8 key length/)
+    } finally {
+      webcrypto.subtle.exportKey =
+        /** @type {typeof webcrypto.subtle.exportKey} */ (exportKey)
+    }
+  })
+
+  it('generate extractable throws on unsupported pkcs8 key format', async () => {
+    const exportKey = /** @type {any} */ (webcrypto.subtle.exportKey)
+    webcrypto.subtle.exportKey = async function (format, key) {
+      if (format === 'pkcs8') {
+        const pkcs8 = new Uint8Array(await exportKey.call(this, format, key))
+        pkcs8[0] = 0x00
+        return pkcs8
+      }
+      return exportKey.call(this, format, key)
+    }
+
+    try {
+      await Lib.generate({ extractable: true })
+      assert.fail('Expected to throw')
+    } catch (error) {
+      assert.match(String(error), /Unsupported ed25519 pkcs8 key format/)
+    } finally {
+      webcrypto.subtle.exportKey =
+        /** @type {typeof webcrypto.subtle.exportKey} */ (exportKey)
+    }
+  })
+
+  it('derive throws when JWK has no x', async () => {
+    const exportKey = /** @type {any} */ (webcrypto.subtle.exportKey)
+    webcrypto.subtle.exportKey = async function (format, key) {
+      if (format === 'jwk') {
+        return {}
+      }
+      return exportKey.call(this, format, key)
+    }
+
+    try {
+      await Lib.derive(new Uint8Array(32))
+      assert.fail('Expected to throw')
+    } catch (error) {
+      assert.match(String(error), /Can not derive ed25519 public key from JWK/)
+    } finally {
+      webcrypto.subtle.exportKey =
+        /** @type {typeof webcrypto.subtle.exportKey} */ (exportKey)
+    }
+  })
+
+  it('derive throws when JWK x has invalid size', async () => {
+    const exportKey = /** @type {any} */ (webcrypto.subtle.exportKey)
+    webcrypto.subtle.exportKey = async function (format, key) {
+      if (format === 'jwk') {
+        return { x: base64url.baseEncode(new Uint8Array(31)) }
+      }
+      return exportKey.call(this, format, key)
+    }
+
+    try {
+      await Lib.derive(new Uint8Array(32))
+      assert.fail('Expected to throw')
+    } catch (error) {
+      assert.match(String(error), /Expected JWK public key with byteLength 32/)
+    } finally {
+      webcrypto.subtle.exportKey =
+        /** @type {typeof webcrypto.subtle.exportKey} */ (exportKey)
+    }
   })
 })
 
