@@ -66,6 +66,8 @@ const [receipt] = await connection.execute(invocation)
 console.log(receipt.out.error ? 'Failed:' : 'Success:', receipt.out)
 ```
 
+> 📝 **Tested in**: [`client-readme-snippets.spec.js`](./test/client-readme-snippets.spec.js)
+
 ### Using Server as Channel (for Testing)
 
 For testing or local development, you can use a UCAN server directly as a channel without HTTP. See the [`@ucanto/server` README](../server/README.md) for details on setting up a server.
@@ -85,7 +87,8 @@ Create a file called `generate-keys.js`:
 import { ed25519 } from '@ucanto/principal'
 
 async function generateKeys() {
-  const keypair = await ed25519.generate()
+  // Use extractable keys if you need to serialize for env vars.
+  const keypair = await ed25519.generate({ extractable: true })
   
   const privateKey = ed25519.format(keypair)
   
@@ -94,6 +97,8 @@ async function generateKeys() {
 
 generateKeys().catch(console.error)
 ```
+
+> 📝 **Tested in**: [`client-readme-snippets.spec.js`](./test/client-readme-snippets.spec.js)
 
 Then run it:
 

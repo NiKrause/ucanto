@@ -225,7 +225,7 @@ const aboutBob = Client.invoke({
 
 This example is tested in the integration tests:
 
-- **Complete workflow test**: [`readme-integration.spec.js:19`](../test/readme-integration.spec.js#L19) - End-to-end integration test
-- **Component tests**: [`readme-examples.spec.js:11`](../test/readme-examples.spec.js#L11) - Individual capability and service tests
+- **Complete workflow test**: [`server-readme-integration.spec.js:19`](./test/server-readme-integration.spec.js#L19) - End-to-end integration test
+- **Component tests**: [`server-readme-snippets.spec.js:11`](./test/server-readme-snippets.spec.js#L11) - Individual capability and service tests
 
 For more details, see the [`ucanto` documentation](https://github.com/storacha/ucanto).
