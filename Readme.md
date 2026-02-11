@@ -113,8 +113,9 @@ const result = await invocation.execute(connection)
 ```
 
 > 📝 **Tested in**: 
+
 > - [`packages/client/test/client.spec.js:70`](./packages/client/test/client.spec.js#L70) - Delegation creation and usage
-> - [`packages/server/test/readme-integration.spec.js:160`](./packages/server/test/readme-integration.spec.js#L160) - Delegation with server validation
+> - [`packages/server/test/server-readme-integration.spec.js:160`](./packages/server/test/server-readme-integration.spec.js#L160) - Delegation with server validation
 
 ### Batch Operations
 
@@ -205,7 +206,7 @@ This demonstrates how UCAN's delegation system provides fine-grained access cont
 - ❌ **Mallory fails** - Bob doesn't have permission for Mallory's namespace
 - 🔒 **Security** - The service validates the delegation chain and resource ownership
 
-> 📝 **Tested in**: [`packages/server/test/readme-integration.spec.js:99`](./packages/server/test/readme-integration.spec.js#L99) - Advanced delegation patterns with namespace validation
+> 📝 **Tested in**: [`packages/server/test/server-readme-integration.spec.js:99`](./packages/server/test/server-readme-integration.spec.js#L99) - Advanced delegation patterns with namespace validation
 
 ## Service-Specific Examples
 
@@ -246,24 +247,24 @@ const connection = Client.connect({
 import { ed25519 } from '@ucanto/principal'
 
 // Generate new keys
-const agent = await ed25519.generate()
+const agent = await ed25519.generate({ extractable: true })
 
 // Save keys (browser)
-localStorage.setItem('agent', agent.toString())
+localStorage.setItem('agent', ed25519.format(agent))
 
 // Load keys (browser)  
 const savedAgent = ed25519.parse(localStorage.getItem('agent'))
 
 // Save keys (Node.js)
 import fs from 'fs/promises'
-await fs.writeFile('agent.key', agent.toString())
+await fs.writeFile('agent.key', ed25519.format(agent))
 
 // Load keys (Node.js)
 const keyData = await fs.readFile('agent.key', 'utf-8')
 const loadedAgent = ed25519.parse(keyData)
 ```
 
-> 📝 **Tested in**: [`packages/server/test/readme-examples.spec.js:54`](./packages/server/test/readme-examples.spec.js#L54) - Key generation, formatting, and parsing
+> 📝 **Tested in**: [`packages/server/test/server-readme-snippets.spec.js:54`](./packages/server/test/server-readme-snippets.spec.js#L54) - Key generation, formatting, and parsing
 
 ## Package Overview
 

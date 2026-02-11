@@ -65,6 +65,8 @@ const replyMessage = await CAR.response.decode(response)
 console.log('Received:', replyMessage.receipts.size, 'receipts')
 ```
 
+> 📝 **Tested in**: [`transport-readme-snippets.spec.js`](./test/transport-readme-snippets.spec.js)
+
 ### Server as Channel (for Testing)
 
 For testing, you can use a UCAN server directly as a channel without HTTP. See the [`@ucanto/server` README](../server/README.md) for examples of using a server as a channel.
@@ -84,7 +86,8 @@ Create a file called `generate-keys.js`:
 import { ed25519 } from '@ucanto/principal'
 
 async function generateKeys() {
-  const keypair = await ed25519.generate()
+  // Use extractable keys if you need to serialize for env vars.
+  const keypair = await ed25519.generate({ extractable: true })
   
   const privateKey = ed25519.format(keypair)
   
@@ -93,6 +96,8 @@ async function generateKeys() {
 
 generateKeys().catch(console.error)
 ```
+
+> 📝 **Tested in**: [`transport-readme-snippets.spec.js`](./test/transport-readme-snippets.spec.js)
 
 Then run it:
 
@@ -141,6 +146,8 @@ const inbound = Codec.inbound({
   encoders: { 'application/vnd.ipld.car': CAR.response },
 })
 ```
+
+> 📝 **Tested in**: [`transport-readme-snippets.spec.js`](./test/transport-readme-snippets.spec.js)
 
 **What's happening:** Transport handles the low-level details of UCAN communication - encoding messages into CAR format, managing HTTP headers, content negotiation, and error handling. Most developers use `@ucanto/client` which handles this automatically.
 
