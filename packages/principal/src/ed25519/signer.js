@@ -1,4 +1,5 @@
 import * as ED25519 from '@noble/ed25519'
+import { webcrypto } from 'one-webcrypto'
 import { varint } from 'multiformats'
 import * as API from './type.js'
 import * as Verifier from './verifier.js'
@@ -23,9 +24,33 @@ export const PUB_KEY_OFFSET = PRIVATE_TAG_SIZE + KEY_SIZE
 
 /**
  * Generates new issuer by generating underlying ED25519 keypair.
+ * @param {{extractable?: boolean}} [options]
  * @returns {Promise<API.EdSigner>}
  */
-export const generate = () => derive(ED25519.utils.randomPrivateKey())
+export const generate = async ({ extractable = false } = {}) => {
+  if (extractable) {
+    return derive(ED25519.utils.randomPrivateKey())
+  }
+
+  const keypair = /** @type {CryptoKeyPair} */ (
+    await webcrypto.subtle.generateKey({ name: 'Ed25519' }, false, [
+      'sign',
+      'verify',
+    ])
+  )
+
+  const raw = new Uint8Array(
+    await webcrypto.subtle.exportKey('raw', keypair.publicKey)
+  )
+  const bytes = new Uint8Array(PUBLIC_TAG_SIZE + KEY_SIZE)
+  varint.encodeTo(Verifier.code, bytes, 0)
+  bytes.set(raw, PUBLIC_TAG_SIZE)
+
+  return new UnextractableEd25519Signer({
+    privateKey: keypair.privateKey,
+    verifier: Verifier.decode(bytes),
+  })
+}
 
 /**
  * Derives issuer from 32 byte long secret key.
@@ -57,9 +82,20 @@ export const derive = async secret => {
  */
 export const from = ({ id, keys }) => {
   if (id.startsWith('did:key:')) {
-    const key = keys[/** @type {API.DIDKey} */ (id)]
+    const did = /** @type {API.DIDKey} */ (id)
+    const key = keys[did]
     if (key instanceof Uint8Array) {
       return decode(key)
+    } else if (
+      key &&
+      key.type === 'private' &&
+      key.algorithm &&
+      key.algorithm.name === 'Ed25519'
+    ) {
+      return new UnextractableEd25519Signer({
+        privateKey: key,
+        verifier: /** @type {API.EdVerifier} */ (Verifier.parse(did)),
+      })
     }
   }
   throw new TypeError(`Unsupported archive format`)
@@ -219,6 +255,91 @@ class Ed25519Signer extends Uint8Array {
     return {
       id,
       keys: { [id]: this.encode() },
+    }
+  }
+}
+
+/**
+ * @implements {API.EdSigner}
+ */
+class UnextractableEd25519Signer {
+  /**
+   * @param {object} options
+   * @param {CryptoKey} options.privateKey
+   * @param {API.EdVerifier} options.verifier
+   */
+  constructor({ privateKey, verifier }) {
+    this.privateKey = privateKey
+    this.verifier = verifier
+  }
+
+  /** @type {typeof code} */
+  get code() {
+    return code
+  }
+
+  get signer() {
+    return this
+  }
+
+  did() {
+    return this.verifier.did()
+  }
+
+  toDIDKey() {
+    return this.verifier.toDIDKey()
+  }
+
+  /**
+   * @template {API.DID} ID
+   * @param {ID} id
+   * @returns {API.Signer<ID, typeof Signature.EdDSA>}
+   */
+  withDID(id) {
+    return Signer.withDID(this, id)
+  }
+
+  /**
+   * @template T
+   * @param {API.ByteView<T>} payload
+   * @returns {Promise<API.SignatureView<T, typeof Signature.EdDSA>>}
+   */
+  async sign(payload) {
+    const raw = new Uint8Array(
+      await webcrypto.subtle.sign({ name: 'Ed25519' }, this.privateKey, payload)
+    )
+    return Signature.create(this.signatureCode, raw)
+  }
+
+  /**
+   * @template T
+   * @param {API.ByteView<T>} payload
+   * @param {API.Signature<T, typeof this.signatureCode>} signature
+   */
+  verify(payload, signature) {
+    return this.verifier.verify(payload, signature)
+  }
+
+  get signatureAlgorithm() {
+    return signatureAlgorithm
+  }
+
+  get signatureCode() {
+    return Signature.EdDSA
+  }
+
+  /**
+   * @returns {API.ByteView<API.EdSigner & CryptoKeyPair>}
+   */
+  encode() {
+    throw new TypeError('Unextractable ed25519 key can not be encoded')
+  }
+
+  toArchive() {
+    const id = this.did()
+    return {
+      id,
+      keys: { [id]: this.privateKey },
     }
   }
 }
