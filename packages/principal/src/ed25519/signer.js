@@ -1,9 +1,8 @@
-import * as ED25519 from '@noble/ed25519'
 import { webcrypto } from 'one-webcrypto'
 import { varint } from 'multiformats'
 import * as API from './type.js'
 import * as Verifier from './verifier.js'
-import { base64pad } from 'multiformats/bases/base64'
+import { base64pad, base64url } from 'multiformats/bases/base64'
 import * as Signature from '@ipld/dag-ucan/signature'
 import * as Signer from '../signer.js'
 export * from './type.js'
@@ -19,6 +18,11 @@ const PRIVATE_TAG_SIZE = varint.encodingLength(code)
 const PUBLIC_TAG_SIZE = varint.encodingLength(Verifier.code)
 const KEY_SIZE = 32
 const SIZE = PRIVATE_TAG_SIZE + KEY_SIZE + PUBLIC_TAG_SIZE + KEY_SIZE
+const ALG = { name: 'Ed25519' }
+const PKCS8_PREFIX = Uint8Array.from([
+  0x30, 0x2e, 0x02, 0x01, 0x00, 0x30, 0x05, 0x06, 0x03, 0x2b, 0x65, 0x70, 0x04,
+  0x22, 0x04, 0x20,
+])
 
 export const PUB_KEY_OFFSET = PRIVATE_TAG_SIZE + KEY_SIZE
 
@@ -28,16 +32,20 @@ export const PUB_KEY_OFFSET = PRIVATE_TAG_SIZE + KEY_SIZE
  * @returns {Promise<API.EdSigner>}
  */
 export const generate = async ({ extractable = false } = {}) => {
-  if (extractable) {
-    return derive(ED25519.utils.randomPrivateKey())
-  }
-
   const keypair = /** @type {CryptoKeyPair} */ (
-    await webcrypto.subtle.generateKey({ name: 'Ed25519' }, false, [
-      'sign',
-      'verify',
-    ])
+    await webcrypto.subtle.generateKey(ALG, extractable, ['sign', 'verify'])
   )
+
+  if (extractable) {
+    const pkcs8 = new Uint8Array(
+      await webcrypto.subtle.exportKey('pkcs8', keypair.privateKey)
+    )
+    const secret = decodePKCS8(pkcs8)
+    const publicKey = new Uint8Array(
+      await webcrypto.subtle.exportKey('raw', keypair.publicKey)
+    )
+    return createSigner({ secret, publicKey })
+  }
 
   const raw = new Uint8Array(
     await webcrypto.subtle.exportKey('raw', keypair.publicKey)
@@ -64,16 +72,16 @@ export const derive = async secret => {
     )
   }
 
-  const publicKey = await ED25519.getPublicKey(secret)
-  const signer = new Ed25519Signer(SIZE)
-
-  varint.encodeTo(code, signer, 0)
-  signer.set(secret, PRIVATE_TAG_SIZE)
-
-  varint.encodeTo(Verifier.code, signer, PRIVATE_TAG_SIZE + KEY_SIZE)
-  signer.set(publicKey, PRIVATE_TAG_SIZE + KEY_SIZE + PUBLIC_TAG_SIZE)
-
-  return signer
+  const privateKey = await webcrypto.subtle.importKey(
+    'pkcs8',
+    encodePKCS8(secret),
+    ALG,
+    true,
+    ['sign']
+  )
+  const jwk = await webcrypto.subtle.exportKey('jwk', privateKey)
+  const publicKey = decodePublicKey(jwk)
+  return createSigner({ secret, publicKey })
 }
 
 /**
@@ -225,7 +233,18 @@ class Ed25519Signer extends Uint8Array {
    * @returns {Promise<API.SignatureView<T, typeof Signature.EdDSA>>}
    */
   async sign(payload) {
-    const raw = await ED25519.sign(payload, this.secret)
+    const state = /** @type {{privateKey?: Promise<CryptoKey>}} */ (this)
+    const privateKey =
+      state.privateKey ||
+      webcrypto.subtle.importKey('pkcs8', encodePKCS8(this.secret), ALG, true, [
+        'sign',
+      ])
+
+    state.privateKey = privateKey
+
+    const raw = new Uint8Array(
+      await webcrypto.subtle.sign(ALG, await privateKey, payload)
+    )
 
     return Signature.create(this.signatureCode, raw)
   }
@@ -306,7 +325,7 @@ class UnextractableEd25519Signer {
    */
   async sign(payload) {
     const raw = new Uint8Array(
-      await webcrypto.subtle.sign({ name: 'Ed25519' }, this.privateKey, payload)
+      await webcrypto.subtle.sign(ALG, this.privateKey, payload)
     )
     return Signature.create(this.signatureCode, raw)
   }
@@ -342,4 +361,66 @@ class UnextractableEd25519Signer {
       keys: { [id]: this.privateKey },
     }
   }
+}
+
+/**
+ * @param {object} options
+ * @param {Uint8Array} options.secret
+ * @param {Uint8Array} options.publicKey
+ */
+const createSigner = ({ secret, publicKey }) => {
+  const signer = new Ed25519Signer(SIZE)
+
+  varint.encodeTo(code, signer, 0)
+  signer.set(secret, PRIVATE_TAG_SIZE)
+
+  varint.encodeTo(Verifier.code, signer, PRIVATE_TAG_SIZE + KEY_SIZE)
+  signer.set(publicKey, PRIVATE_TAG_SIZE + KEY_SIZE + PUBLIC_TAG_SIZE)
+
+  return signer
+}
+
+/**
+ * @param {Uint8Array} secret
+ */
+const encodePKCS8 = secret => {
+  const bytes = new Uint8Array(PKCS8_PREFIX.length + KEY_SIZE)
+  bytes.set(PKCS8_PREFIX, 0)
+  bytes.set(secret, PKCS8_PREFIX.length)
+  return bytes
+}
+
+/**
+ * @param {Uint8Array} pkcs8
+ */
+const decodePKCS8 = pkcs8 => {
+  if (pkcs8.byteLength !== PKCS8_PREFIX.length + KEY_SIZE) {
+    throw new TypeError('Unsupported ed25519 pkcs8 key length')
+  }
+
+  for (let i = 0; i < PKCS8_PREFIX.length; i += 1) {
+    if (pkcs8[i] !== PKCS8_PREFIX[i]) {
+      throw new TypeError('Unsupported ed25519 pkcs8 key format')
+    }
+  }
+
+  return pkcs8.subarray(PKCS8_PREFIX.length)
+}
+
+/**
+ * @param {JsonWebKey} jwk
+ */
+const decodePublicKey = jwk => {
+  if (typeof jwk.x !== 'string') {
+    throw new TypeError('Can not derive ed25519 public key from JWK')
+  }
+
+  const bytes = base64url.baseDecode(jwk.x)
+  if (bytes.byteLength !== KEY_SIZE) {
+    throw new TypeError(
+      `Expected JWK public key with byteLength ${KEY_SIZE} instead not ${bytes.byteLength}`
+    )
+  }
+
+  return bytes
 }
