@@ -234,16 +234,18 @@ class Ed25519Signer extends Uint8Array {
    */
   async sign(payload) {
     const state = /** @type {{privateKey?: Promise<CryptoKey>}} */ (this)
-    const privateKey =
-      state.privateKey ||
-      webcrypto.subtle.importKey('pkcs8', encodePKCS8(this.secret), ALG, true, [
-        'sign',
-      ])
-
-    state.privateKey = privateKey
+    if (!state.privateKey) {
+      state.privateKey = webcrypto.subtle
+        .importKey('pkcs8', encodePKCS8(this.secret), ALG, true, ['sign'])
+        .catch(error => {
+          // Do not retain a rejected key import promise; allow next call to retry.
+          state.privateKey = undefined
+          throw error
+        })
+    }
 
     const raw = new Uint8Array(
-      await webcrypto.subtle.sign(ALG, await privateKey, payload)
+      await webcrypto.subtle.sign(ALG, await state.privateKey, payload)
     )
 
     return Signature.create(this.signatureCode, raw)
