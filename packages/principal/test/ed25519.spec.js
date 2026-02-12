@@ -137,6 +137,48 @@ describe('signing principal', () => {
     assert.equal(await alias.verify(payload, signature), true)
   })
 
+  it('extractable signer retries sign after importKey failure', async () => {
+    const importKey = /** @type {any} */ (webcrypto.subtle.importKey)
+    let failOnce = true
+    webcrypto.subtle.importKey = async function (
+      format,
+      keyData,
+      algorithm,
+      extractable,
+      keyUsages
+    ) {
+      if (format === 'pkcs8' && failOnce) {
+        failOnce = false
+        throw new Error('injected importKey failure')
+      }
+      return importKey.call(
+        this,
+        format,
+        keyData,
+        algorithm,
+        extractable,
+        keyUsages
+      )
+    }
+
+    try {
+      const signer = await Lib.generate({ extractable: true })
+      const payload = new TextEncoder().encode('hello world')
+      try {
+        await signer.sign(payload)
+        assert.fail('Expected first sign() to throw')
+      } catch (error) {
+        assert.match(String(error), /injected importKey failure/)
+      }
+
+      const signature = await signer.sign(payload)
+      assert.equal(await signer.verify(payload, signature), true)
+    } finally {
+      webcrypto.subtle.importKey =
+        /** @type {typeof webcrypto.subtle.importKey} */ (importKey)
+    }
+  })
+
   it('generate extractable throws on unsupported pkcs8 key length', async () => {
     const exportKey = /** @type {any} */ (webcrypto.subtle.exportKey)
     webcrypto.subtle.exportKey = async function (format, key) {
