@@ -41,7 +41,7 @@
     "chai": "^4.3.6",
     "mocha": "^10.1.0",
     "nyc": "^15.1.0",
-    "playwright-test": "^8.2.0",
+    "playwright-test": "^14.1.12",
     "typescript": "^5.0.4"
   },
   "type": "module",
