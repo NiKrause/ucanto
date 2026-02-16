@@ -36,9 +36,15 @@ importers:
       '@ucanto/principal':
         specifier: workspace:^
         version: link:../principal
+      '@ucanto/server':
+        specifier: workspace:^
+        version: link:../server
       '@ucanto/transport':
         specifier: workspace:^
         version: link:../transport
+      '@ucanto/validator':
+        specifier: workspace:^
+        version: link:../validator
       '@web-std/fetch':
         specifier: ^4.1.0
         version: 4.2.1
@@ -793,6 +799,7 @@ packages:
   chai-subset@1.6.0:
     resolution: {integrity: sha512-K3d+KmqdS5XKW5DWPd5sgNffL3uxdDe+6GdnJh3AYPhwnBGRY5urfvfcbRtWIvvpz+KxkL9FeBB6MZewLUNwug==}
     engines: {node: '>=4'}
+    deprecated: 'functionality of this lib is built-in to chai now. see more details here: https://github.com/debitoor/chai-subset/pull/85'
 
   chai@4.5.0:
     resolution: {integrity: sha512-RITGBfijLkBddZvnn8jdqoTypxvqbOLYQkGGxXzeFjVHvudaPw0HNFD9x928/eUwYWd2dPCugVqspGALTZZQKw==}
@@ -3936,8 +3943,6 @@ snapshots:
       is-typedarray: 1.0.0
 
   typescript@5.0.4: {}
-
-  typescript@5.7.3: {}
 
   unbox-primitive@1.1.0:
     dependencies:
