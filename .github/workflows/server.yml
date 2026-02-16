@@ -83,6 +83,9 @@ jobs:
 
       - name: Test (Node)
         run: pnpm run --if-present --dir packages/${{matrix.project}} test:node
+      - name: Install Playwright Windows Dependency
+        if: runner.os == 'Windows'
+        run: pnpm --dir packages/${{matrix.project}} exec playwright install winldd
 
       - name: Test (Web)
         run: pnpm run --if-present --dir packages/${{matrix.project}} test:web
