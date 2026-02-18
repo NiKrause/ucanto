@@ -36,9 +36,15 @@ importers:
       '@ucanto/principal':
         specifier: workspace:^
         version: link:../principal
+      '@ucanto/server':
+        specifier: workspace:^
+        version: link:../server
       '@ucanto/transport':
         specifier: workspace:^
         version: link:../transport
+      '@ucanto/validator':
+        specifier: workspace:^
+        version: link:../validator
       '@web-std/fetch':
         specifier: ^4.1.0
         version: 4.2.1
@@ -3416,7 +3422,16 @@ snapshots:
 
   typescript@5.0.4: {}
 
+<<<<<<< feat/658-webcrypto-ed25519-agent-keys
   unicorn-magic@0.3.0: {}
+=======
+  unbox-primitive@1.1.0:
+    dependencies:
+      call-bound: 1.0.3
+      has-bigints: 1.1.0
+      has-symbols: 1.1.0
+      which-boxed-primitive: 1.1.1
+>>>>>>> main
 
   unique-string@3.0.0:
     dependencies:
