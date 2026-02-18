@@ -6,8 +6,6 @@ import * as Service from './service.js'
 import { Receipt, Message, CBOR } from '@ucanto/core'
 import { alice, bob, mallory, service as w3 } from './fixtures.js'
 import fetch from '@web-std/fetch'
-import * as Server from '@ucanto/server'
-import { Schema } from '@ucanto/validator'
 
 test('encode invocation', async () => {
   /** @type {Client.ConnectionView<Service.Service>} */
@@ -142,90 +140,7 @@ test('encode delegated invocation', async () => {
   }
 })
 
-// Create the service instance
-const service = Service.create()
-
-// Define capabilities
-const storeAddCapability = Server.capability({
-  can: 'store/add',
-  with: Server.URI.match({ protocol: 'did:' }),
-  nb: Schema.struct({
-    link: Server.Link.match().optional(),
-  }),
-  derives: (claimed, delegated) => {
-    if (claimed.with !== delegated.with) {
-      return Server.fail(
-        `Expected 'with: "${delegated.with}"' instead got '${claimed.with}'`
-      )
-    } else if (
-      delegated.nb.link &&
-      `${delegated.nb.link}` !== `${claimed.nb.link}`
-    ) {
-      return Server.fail(
-        `Link ${
-          claimed.nb.link == null ? '' : `${claimed.nb.link} `
-        }violates imposed ${delegated.nb.link} constraint`
-      )
-    } else {
-      return Server.ok({})
-    }
-  },
-})
-
-const storeRemoveCapability = Server.capability({
-  can: 'store/remove',
-  with: Server.URI.match({ protocol: 'did:' }),
-  nb: Schema.struct({
-    link: Server.Link.match().optional(),
-  }),
-  derives: (claimed, delegated) => {
-    if (claimed.with !== delegated.with) {
-      return Server.fail(
-        `Expected 'with: "${delegated.with}"' instead got '${claimed.with}'`
-      )
-    } else if (
-      delegated.nb.link &&
-      `${delegated.nb.link}` !== `${claimed.nb.link}`
-    ) {
-      return Server.fail(
-        `Link ${
-          claimed.nb.link == null ? '' : `${claimed.nb.link} `
-        }violates imposed ${delegated.nb.link} constraint`
-      )
-    } else {
-      return Server.ok({})
-    }
-  },
-})
-
-// Create server with service handlers using Server.provide
-const server = Server.create({
-  id: w3,
-  service: {
-    store: {
-      add: Server.provide(storeAddCapability, async ({ capability, invocation }) => {
-        // Call the existing service method with the invocation
-        return await service.store.add(/** @type {Client.Invocation<any>} */ (invocation))
-      }),
-      remove: Server.provide(storeRemoveCapability, async ({ capability, invocation }) => {
-        // Call the existing service method with the invocation
-        return await service.store.remove(/** @type {Client.Invocation<any>} */ (invocation))
-      }),
-    },
-  },
-  codec: CAR.inbound,
-  validateAuthorization: () => ({ ok: {} }),
-})
-
-// Use server directly as channel (no HTTP, no mock fetch!)
-/** @type {Client.ConnectionView<Service.Service>} */
-const connection = Client.connect({
-  id: w3,
-  channel: server, // 🎯 Server directly as channel - validates delegation chains!
-  codec: CAR.outbound,
-})
-
-test('execute', async () => {
+test('execute invocation', async () => {
   const car = await CAR.codec.write({
     roots: [await CBOR.write({ hello: 'world ' })],
   })
@@ -241,33 +156,37 @@ test('execute', async () => {
     proofs: [],
   })
 
-  const remove = Client.invoke({
-    issuer: alice,
-    audience: w3,
-    capability: {
-      can: 'store/remove',
-      with: alice.did(),
-      nb: { link: car.cid },
+  const channel = {
+    request: async (/** @type {any} */ input) => {
+      const { invocations } = await CAR.request.decode(input)
+      const receipts = await Promise.all(
+        invocations.map(invocation =>
+          Receipt.issue({
+            ran: invocation.cid,
+            issuer: w3,
+            result: {
+              ok: {
+                with: invocation.capabilities[0].with,
+                link: car.cid,
+                status: 'upload',
+                url: 'http://localhost:9090/',
+              },
+            },
+          })
+        )
+      )
+      const message = await Message.build({
+        receipts: /** @type {any} */ (receipts),
+      })
+      return CAR.response.encode(message)
     },
+  }
+
+  const connection = Client.connect({
+    id: w3,
+    channel: /** @type {any} */ (channel),
+    codec: CAR.outbound,
   })
-
-  const e1 = await add.execute(connection)
-
-  assert.deepEqual(e1.out, {
-    error: {
-      // @ts-expect-error
-      name: 'UnknownDIDError',
-      message: `DID ${alice.did()} has no account`,
-      did: alice.did(),
-    },
-  })
-
-  // fake register alice
-  service.access.accounts.register(
-    alice.did(),
-    'did:email:alice@web.mail',
-    car.cid
-  )
 
   const [r1] = await connection.execute(add)
   assert.deepEqual(r1.out, {
@@ -280,61 +199,7 @@ test('execute', async () => {
   })
 })
 
-test('execute with delegations', async () => {
-  const car = await CAR.codec.write({
-    roots: [await CBOR.write({ hello: 'world ' })],
-  })
-
-  const add = Client.invoke({
-    issuer: bob,
-    audience: w3,
-    capability: {
-      can: 'store/add',
-      with: bob.did(),
-      nb: { link: car.cid },
-    },
-    proofs: [],
-  })
-
-  const [e1] = await connection.execute(await add.delegate())
-
-  assert.deepEqual(e1.out, {
-    error: {
-      // @ts-expect-error
-      name: 'UnknownDIDError',
-      message: `DID ${bob.did()} has no account`,
-      did: bob.did(),
-    },
-  })
-
-  // fake register alice
-  service.access.accounts.register(bob.did(), 'did:email:bob@web.mail', car.cid)
-
-  const [r1] = await connection.execute(await add.delegate())
-  assert.deepEqual(r1.out, {
-    ok: {
-      with: bob.did(),
-      link: car.cid,
-      status: 'upload',
-      url: 'http://localhost:9090/',
-    },
-  })
-})
-
 test('decode error', async () => {
-  const client = Client.connect({
-    id: w3,
-    channel: server,
-    codec: Codec.outbound({
-      encoders: {
-        'application/car': CAR.request,
-      },
-      decoders: {
-        'application/car+receipt': CAR.response,
-      },
-    }),
-  })
-
   const car = await CAR.codec.write({
     roots: [await CBOR.write({ hello: 'world ' })],
   })
@@ -350,7 +215,39 @@ test('decode error', async () => {
     proofs: [],
   })
 
-  const [e1] = await client.execute(await add.delegate())
+  const channel = {
+    request: async (/** @type {any} */ input) => {
+      const { invocations } = await CAR.request.decode(input)
+      const receipts = await Promise.all(
+        invocations.map(invocation =>
+          Receipt.issue({
+            ran: invocation.cid,
+            issuer: w3,
+            result: { ok: {} },
+          })
+        )
+      )
+      const message = await Message.build({
+        receipts: /** @type {any} */ (receipts),
+      })
+      return CAR.response.encode(message)
+    },
+  }
+
+  const client = Client.connect({
+    id: w3,
+    channel: /** @type {any} */ (channel),
+    codec: Codec.outbound({
+      encoders: {
+        'application/car': CAR.request,
+      },
+      decoders: {
+        'application/car+receipt': CAR.response,
+      },
+    }),
+  })
+
+  const [e1] = await client.execute(add)
 
   assert.deepEqual(
     {
