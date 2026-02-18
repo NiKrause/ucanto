@@ -6,7 +6,9 @@ import * as Service from './service.js'
 import { Receipt, Message, CBOR } from '@ucanto/core'
 import { alice, bob, mallory, service as w3 } from './fixtures.js'
 import fetch from '@web-std/fetch'
+// @ts-ignore test-only package is outside client project references
 import * as Server from '@ucanto/server'
+// @ts-ignore test-only package is outside client project references
 import { Schema } from '@ucanto/validator'
 
 test('encode invocation', async () => {
@@ -152,7 +154,10 @@ const storeAddCapability = Server.capability({
   nb: Schema.struct({
     link: Server.Link.match().optional(),
   }),
-  derives: (claimed, delegated) => {
+  derives: (
+    /** @type {{ with: string, nb: { link?: unknown } }} */ claimed,
+    /** @type {{ with: string, nb: { link?: unknown } }} */ delegated
+  ) => {
     if (claimed.with !== delegated.with) {
       return Server.fail(
         `Expected 'with: "${delegated.with}"' instead got '${claimed.with}'`
@@ -178,7 +183,10 @@ const storeRemoveCapability = Server.capability({
   nb: Schema.struct({
     link: Server.Link.match().optional(),
   }),
-  derives: (claimed, delegated) => {
+  derives: (
+    /** @type {{ with: string, nb: { link?: unknown } }} */ claimed,
+    /** @type {{ with: string, nb: { link?: unknown } }} */ delegated
+  ) => {
     if (claimed.with !== delegated.with) {
       return Server.fail(
         `Expected 'with: "${delegated.with}"' instead got '${claimed.with}'`
@@ -203,14 +211,34 @@ const server = Server.create({
   id: w3,
   service: {
     store: {
-      add: Server.provide(storeAddCapability, async ({ capability, invocation }) => {
-        // Call the existing service method with the invocation
-        return await service.store.add(/** @type {Client.Invocation<any>} */ (invocation))
-      }),
-      remove: Server.provide(storeRemoveCapability, async ({ capability, invocation }) => {
-        // Call the existing service method with the invocation
-        return await service.store.remove(/** @type {Client.Invocation<any>} */ (invocation))
-      }),
+      add: Server.provide(
+        storeAddCapability,
+        async (
+          /** @type {{ capability: unknown, invocation: unknown }} */ {
+            capability,
+            invocation,
+          }
+        ) => {
+          // Call the existing service method with the invocation
+          return await service.store.add(
+            /** @type {Client.Invocation<any>} */ (invocation)
+          )
+        }
+      ),
+      remove: Server.provide(
+        storeRemoveCapability,
+        async (
+          /** @type {{ capability: unknown, invocation: unknown }} */ {
+            capability,
+            invocation,
+          }
+        ) => {
+          // Call the existing service method with the invocation
+          return await service.store.remove(
+            /** @type {Client.Invocation<any>} */ (invocation)
+          )
+        }
+      ),
     },
   },
   codec: CAR.inbound,
