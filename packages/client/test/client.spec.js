@@ -245,7 +245,17 @@ const server = Server.create({
   validateAuthorization: () => ({ ok: {} }),
 })
 
+/**
+ * @typedef {{
+ *   store: {
+ *     add: Client.ServiceMethod<any, any, any>
+ *     remove: Client.ServiceMethod<any, any, any>
+ *   }
+ * }} StoreService
+ */
+
 // Use server directly as channel (no HTTP, no mock fetch!)
+/** @type {Client.ConnectionView<StoreService>} */
 const connection = Client.connect({
   id: w3,
   channel: server, // 🎯 Server directly as channel - validates delegation chains!
