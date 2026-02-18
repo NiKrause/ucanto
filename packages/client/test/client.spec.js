@@ -139,3 +139,126 @@ test('encode delegated invocation', async () => {
     )
   }
 })
+
+test('execute invocation', async () => {
+  const car = await CAR.codec.write({
+    roots: [await CBOR.write({ hello: 'world ' })],
+  })
+
+  const add = Client.invoke({
+    issuer: alice,
+    audience: w3,
+    capability: {
+      can: 'store/add',
+      with: alice.did(),
+      nb: { link: car.cid },
+    },
+    proofs: [],
+  })
+
+  const channel = {
+    request: async (/** @type {any} */ input) => {
+      const { invocations } = await CAR.request.decode(input)
+      const receipts = await Promise.all(
+        invocations.map(invocation =>
+          Receipt.issue({
+            ran: invocation.cid,
+            issuer: w3,
+            result: {
+              ok: {
+                with: invocation.capabilities[0].with,
+                link: car.cid,
+                status: 'upload',
+                url: 'http://localhost:9090/',
+              },
+            },
+          })
+        )
+      )
+      const message = await Message.build({
+        receipts: /** @type {any} */ (receipts),
+      })
+      return CAR.response.encode(message)
+    },
+  }
+
+  const connection = Client.connect({
+    id: w3,
+    channel: /** @type {any} */ (channel),
+    codec: CAR.outbound,
+  })
+
+  const [r1] = await connection.execute(add)
+  assert.deepEqual(r1.out, {
+    ok: {
+      with: alice.did(),
+      link: car.cid,
+      status: 'upload',
+      url: 'http://localhost:9090/',
+    },
+  })
+})
+
+test('decode error', async () => {
+  const car = await CAR.codec.write({
+    roots: [await CBOR.write({ hello: 'world ' })],
+  })
+
+  const add = Client.invoke({
+    issuer: alice,
+    audience: w3,
+    capability: {
+      can: 'store/add',
+      with: alice.did(),
+      nb: { link: car.cid },
+    },
+    proofs: [],
+  })
+
+  const channel = {
+    request: async (/** @type {any} */ input) => {
+      const { invocations } = await CAR.request.decode(input)
+      const receipts = await Promise.all(
+        invocations.map(invocation =>
+          Receipt.issue({
+            ran: invocation.cid,
+            issuer: w3,
+            result: { ok: {} },
+          })
+        )
+      )
+      const message = await Message.build({
+        receipts: /** @type {any} */ (receipts),
+      })
+      return CAR.response.encode(message)
+    },
+  }
+
+  const client = Client.connect({
+    id: w3,
+    channel: /** @type {any} */ (channel),
+    codec: Codec.outbound({
+      encoders: {
+        'application/car': CAR.request,
+      },
+      decoders: {
+        'application/car+receipt': CAR.response,
+      },
+    }),
+  })
+
+  const [e1] = await client.execute(add)
+
+  assert.deepEqual(
+    {
+      error: {
+        message:
+          "Can not decode response with content-type 'application/vnd.ipld.car' because no matching transport decoder is configured.",
+        // @ts-expect-error
+        name: 'TypeError',
+        error: true,
+      },
+    },
+    e1.out
+  )
+})
