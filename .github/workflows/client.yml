@@ -24,7 +24,7 @@ jobs:
     strategy:
       matrix:
         node-version:
-          - ''
+          - '20'
         project:
           - client
     steps:
@@ -52,7 +52,7 @@ jobs:
     strategy:
       matrix:
         node-version:
-          - ''
+          - '20'
           - 'latest'
         os:
           - ubuntu-latest
