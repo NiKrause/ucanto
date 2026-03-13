@@ -10,8 +10,6 @@ on:
       - 'packages/interface/**'
       - 'packages/transport/**'
   pull_request:
-    branches:
-      - main
     paths:
       - 'packages/core/**'
       - 'packages/interface/**'

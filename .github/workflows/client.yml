@@ -11,8 +11,6 @@ on:
       - 'packages/transport/**'
       - 'packages/client/**'
   pull_request:
-    branches:
-      - main
     paths:
       - 'packages/interface/**'
       - 'packages/core/**'

@@ -13,8 +13,6 @@ on:
       - 'packages/validator/**'
       - 'packages/server/**'
   pull_request:
-    branches:
-      - main
     paths:
       - 'packages/interface/**'
       - 'packages/core/**'

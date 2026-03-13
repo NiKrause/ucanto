@@ -9,8 +9,6 @@ on:
       - 'packages/interface/**'
       - 'packages/principal/**'
   pull_request:
-    branches:
-      - main
     paths:
       - 'packages/interface/**'
       - 'packages/principal/**'
